@@ -1,0 +1,28 @@
+# Lessons from drone dev
+
+## Check the rates!
+
+Unreal by default uses vsync to you monitor. Nice for games, no tearing when rendering. Bad for us! dont care about no monitor. Want maximum possible framerate. Start the maps with -NoVSync flag. (Also -BENCHMARK ?) https://github.com/microsoft/AirSim-NeurIPS2019-Drone-Racing/issues/111
+
+We're getting attitude and position data about the drone via MAVLINK. We can request the autopilot to send us messages at an increased rate, and stop sending other messages to avoid overloading the channel. Some comm software like mavproxy cam interfere with this rates by resetting them once in a while. Verify the rates are good by looking at the actual traffic https://mavlink.io/en/guide/wireshark.html
+For mavproxy you can pass --streamrate=-1 to stop mavproxy from resetting the rates. Your ardupilot SITL command may then become `python ardupilot/Tools/autotest/sim_vehicle.py -v ArduCopter -f airsim-copter --console --map --mavproxy-args -\-streamrate=-1`
+
+## What is the sea level?
+
+Sea level is different in different parts of the planet. Because gravity fluctuates slightly depending on location. So there's a "theoretical sea level assuming gravity is equal" -- an ellipsoid (usually WGS84). And there is an "actual sea level obtained by mesuring the gravitaional forve" -- a geoid (usually EGM96/EGM2008). Some GPS sensors use one as reference, some the other. Some DEM maps use one, some the other. Is your simulator using the same one as your GPS sensor? Is your simulator using the same one as your SIMULATED GPS SENSOR? What about your DEM?
+
+We're using ASTER DEM maps which are referenced to EGM96. You can convert it to WGS84 as follows `gdalwarp ASTGTMV003_N44E020_dem.tif new.tif -s_srs EPSG:4326+5773 -t_srs EPSG:4979 -r lanczos`.
+
+## Euler angle conventions
+
+xyz -- intrinsic. Axes don't move.
+XYZ -- extrinsic. After each rotation, axes move.
+MAVLINK messages usually contain ZYX with axes being down,east,north. For georeference xyz with east,north,up is usually used. Others are used, too. cameratransform package uses ZXZ for example.
+
+## Why is my latlon an INT?!
+
+Lost of values passed over mavproxy use fixed point decimals encoded as ints instead of floating point decimals (e.g. gps). Be wary of this. Likely done to avoid floating point skipping values. To convert these to python floats divide by 1e7 for latlon and 1e3 for alt.
+
+## Do you trust your sensors?
+
+My simulated IMU attitude is up to 10 degrees different from the ground truth attitude reported by the simulator :(
